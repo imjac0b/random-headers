@@ -1,4 +1,5 @@
 import { PRESETS, type HeaderGeneratorOptions } from "header-generator";
+import { cpus } from "node:os";
 import { join } from "node:path";
 
 const isDev = Bun.env.NODE_ENV === "development";
@@ -9,6 +10,8 @@ type WorkerJob = {
     name: string;
     options?: Partial<HeaderGeneratorOptions>;
     recreateEach?: boolean;
+    rangeStart?: number;
+    rangeEnd?: number;
 };
 
 const runJob = (job: WorkerJob) =>
@@ -46,13 +49,36 @@ const runJob = (job: WorkerJob) =>
         });
     });
 
-const jobs: WorkerJob[] = [
-    { name: "all", recreateEach: true },
-    ...Object.entries(PRESETS).map(([presetName, presetOptions]) => ({
+const presetJobs: WorkerJob[] = Object.entries(PRESETS).map(
+    ([presetName, presetOptions]) => ({
         name: presetName.toLowerCase(),
         options: presetOptions,
-    })),
-];
+    })
+);
+
+const allWorkerCount = Math.min(
+    filesPerPreset,
+    Math.max(1, cpus().length - 1)
+);
+const allChunkSize = Math.ceil(filesPerPreset / allWorkerCount);
+const allJobs: WorkerJob[] = Array.from(
+    { length: allWorkerCount },
+    (_, index) => {
+        const rangeStart = index * allChunkSize + 1;
+        const rangeEnd = Math.min(
+            filesPerPreset,
+            rangeStart + allChunkSize - 1
+        );
+        return {
+            name: "all",
+            recreateEach: true,
+            rangeStart,
+            rangeEnd,
+        };
+    }
+);
+
+const jobs: WorkerJob[] = [...allJobs, ...presetJobs];
 
 console.log(`Writing ${filesPerPreset} files per preset...`);
 await Promise.all(jobs.map((job) => runJob(job)));

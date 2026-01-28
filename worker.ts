@@ -9,6 +9,8 @@ type WorkerPayload = {
         name: string;
         options?: Partial<HeaderGeneratorOptions>;
         recreateEach?: boolean;
+        rangeStart?: number;
+        rangeEnd?: number;
     };
     filesPerPreset: number;
     distRoot: string;
@@ -28,7 +30,10 @@ self.onmessage = async (event: MessageEvent<WorkerPayload>) => {
             ? new HeaderGenerator(job.options)
             : new HeaderGenerator();
 
-        for (let i = 1; i <= filesPerPreset; i += 1) {
+        const rangeStart = job.rangeStart ?? 1;
+        const rangeEnd = job.rangeEnd ?? filesPerPreset;
+
+        for (let i = rangeStart; i <= rangeEnd; i += 1) {
             const activeGenerator = job.recreateEach
                 ? new HeaderGenerator()
                 : baseGenerator;
@@ -37,7 +42,9 @@ self.onmessage = async (event: MessageEvent<WorkerPayload>) => {
             const filepath = join(targetDir, filename);
             await Bun.write(filepath, JSON.stringify(headers, null, 2));
 
-            if (i === 1 || i === filesPerPreset || i % 50 === 0) {
+            const isStart = i === rangeStart;
+            const isEnd = i === rangeEnd;
+            if (isStart || isEnd || i % 50 === 0) {
                 postMessage({
                     type: "progress",
                     message: `Wrote ${i}/${filesPerPreset} files in ${targetDir}`,
