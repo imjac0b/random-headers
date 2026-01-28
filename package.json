@@ -1,0 +1,15 @@
+{
+  "name": "random-headers",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "header-generator": "^2.1.79"
+  }
+}
