@@ -27,13 +27,20 @@ const writeHeaders = async (
         const filename = `headers-${padNumber(i, width)}.json`;
         const filepath = join(targetDir, filename);
         await Bun.write(filepath, JSON.stringify(headers, null, 2));
+        if (i === 1 || i === filesPerPreset || i % 50 === 0) {
+            console.log(
+                `Wrote ${i}/${filesPerPreset} files in ${targetDir}`
+            );
+        }
     }
 };
 
+console.log(`Writing ${filesPerPreset} files per preset...`);
 await writeHeaders(new HeaderGenerator(), join(distRoot, "all"), true);
 
 for (const [presetName, presetOptions] of Object.entries(PRESETS)) {
     const presetDir = join(distRoot, presetName.toLowerCase());
+    console.log(`Generating preset: ${presetName}`);
     const generator = new HeaderGenerator(presetOptions);
     await writeHeaders(generator, presetDir);
 }
