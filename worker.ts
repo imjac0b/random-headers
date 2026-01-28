@@ -43,7 +43,7 @@ self.onmessage = async (event: MessageEvent<WorkerPayload>) => {
             const headers = activeGenerator.getHeaders();
             const filename = `headers-${padNumber(i, width)}.json`;
             const filepath = join(targetDir, filename);
-            await Bun.write(filepath, JSON.stringify(headers, null, 2));
+            await Bun.write(filepath, JSON.stringify(headers));
 
             const isStart = i === rangeStart;
             const isEnd = i === rangeEnd;
