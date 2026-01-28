@@ -33,6 +33,9 @@ self.onmessage = async (event: MessageEvent<WorkerPayload>) => {
         const rangeStart = job.rangeStart ?? 1;
         const rangeEnd = job.rangeEnd ?? filesPerPreset;
 
+        const totalInRange = rangeEnd - rangeStart + 1;
+        const progressEvery = Math.max(1, Math.floor(totalInRange / 20));
+
         for (let i = rangeStart; i <= rangeEnd; i += 1) {
             const activeGenerator = job.recreateEach
                 ? new HeaderGenerator()
@@ -44,10 +47,11 @@ self.onmessage = async (event: MessageEvent<WorkerPayload>) => {
 
             const isStart = i === rangeStart;
             const isEnd = i === rangeEnd;
-            if (isStart || isEnd || i % 50 === 0) {
+            if (isStart || isEnd || (i - rangeStart) % progressEvery === 0) {
+                const completedInRange = i - rangeStart + 1;
                 postMessage({
                     type: "progress",
-                    message: `Wrote ${i}/${filesPerPreset} files in ${targetDir}`,
+                    message: `Wrote ${completedInRange}/${totalInRange} files in ${targetDir} (range ${rangeStart}-${rangeEnd})`,
                 });
             }
         }
