@@ -1,4 +1,5 @@
 import { PRESETS, type HeaderGeneratorOptions } from "header-generator";
+import { mkdir } from "node:fs/promises";
 import { cpus } from "node:os";
 import { join } from "node:path";
 
@@ -79,6 +80,38 @@ const allJobs: WorkerJob[] = Array.from(
 );
 
 const jobs: WorkerJob[] = [...allJobs, ...presetJobs];
+
+await mkdir(distRoot, { recursive: true });
+
+const folderNames = [
+    "all",
+    ...Object.keys(PRESETS).map((presetName) => presetName.toLowerCase()),
+];
+const indexHtml = `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>random-headers output</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 2rem; }
+      ul { padding-left: 1.25rem; }
+      a { color: inherit; }
+    </style>
+  </head>
+  <body>
+    <h1>random-headers output</h1>
+    <p>Files per preset: ${filesPerPreset}</p>
+    <ul>
+      ${folderNames
+        .map((name) => `<li><a href="./${name}/">${name}</a></li>`)
+        .join("")}
+    </ul>
+  </body>
+</html>
+`;
+
+await Bun.write(join(distRoot, "index.html"), indexHtml);
 
 console.log(`Writing ${filesPerPreset} files per preset...`);
 await Promise.all(jobs.map((job) => runJob(job)));
