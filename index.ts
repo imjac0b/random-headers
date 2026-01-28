@@ -1,49 +1,61 @@
-import { HeaderGenerator, PRESETS } from "header-generator";
-import { mkdir } from "node:fs/promises";
+import { PRESETS, type HeaderGeneratorOptions } from "header-generator";
 import { join } from "node:path";
 
 const isDev = Bun.env.NODE_ENV === "development";
 const filesPerPreset = isDev ? 5 : 50000;
 const distRoot = join(import.meta.dir, "dist");
 
-const padNumber = (value: number, width: number) =>
-    value.toString().padStart(width, "0");
-
-await mkdir(distRoot, { recursive: true });
-
-const writeHeaders = async (
-    generator: HeaderGenerator,
-    targetDir: string,
-    recreateEach = false
-) => {
-    await mkdir(targetDir, { recursive: true });
-    const width = String(filesPerPreset).length;
-
-    for (let i = 1; i <= filesPerPreset; i += 1) {
-        const activeGenerator = recreateEach
-            ? new HeaderGenerator()
-            : generator;
-        const headers = activeGenerator.getHeaders();
-        const filename = `headers-${padNumber(i, width)}.json`;
-        const filepath = join(targetDir, filename);
-        await Bun.write(filepath, JSON.stringify(headers, null, 2));
-        if (i === 1 || i === filesPerPreset || i % 50 === 0) {
-            console.log(
-                `Wrote ${i}/${filesPerPreset} files in ${targetDir}`
-            );
-        }
-    }
+type WorkerJob = {
+    name: string;
+    options?: Partial<HeaderGeneratorOptions>;
+    recreateEach?: boolean;
 };
 
-console.log(`Writing ${filesPerPreset} files per preset...`);
-await writeHeaders(new HeaderGenerator(), join(distRoot, "all"), true);
+const runJob = (job: WorkerJob) =>
+    new Promise<void>((resolve, reject) => {
+        const worker = new Worker(
+            new URL("./worker.ts", import.meta.url).href
+        );
 
-for (const [presetName, presetOptions] of Object.entries(PRESETS)) {
-    const presetDir = join(distRoot, presetName.toLowerCase());
-    console.log(`Generating preset: ${presetName}`);
-    const generator = new HeaderGenerator(presetOptions);
-    await writeHeaders(generator, presetDir);
-}
+        worker.addEventListener("message", (event) => {
+            const data = event.data as
+                | { type: "progress"; message: string }
+                | { type: "done" }
+                | { type: "error"; message: string };
+
+            if (data.type === "progress") {
+                console.log(data.message);
+            } else if (data.type === "done") {
+                worker.terminate();
+                resolve();
+            } else if (data.type === "error") {
+                worker.terminate();
+                reject(new Error(data.message));
+            }
+        });
+
+        worker.addEventListener("error", (event) => {
+            worker.terminate();
+            reject(event.error ?? new Error("Worker failed"));
+        });
+
+        worker.postMessage({
+            job,
+            filesPerPreset,
+            distRoot,
+        });
+    });
+
+const jobs: WorkerJob[] = [
+    { name: "all", recreateEach: true },
+    ...Object.entries(PRESETS).map(([presetName, presetOptions]) => ({
+        name: presetName.toLowerCase(),
+        options: presetOptions,
+    })),
+];
+
+console.log(`Writing ${filesPerPreset} files per preset...`);
+await Promise.all(jobs.map((job) => runJob(job)));
 
 console.log(
     `Generated ${filesPerPreset} header files per preset in ${distRoot}.`
